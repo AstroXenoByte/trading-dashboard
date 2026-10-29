@@ -1,0 +1,135 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum CheckInStatus { TARGET_MET TARGET_NOT_MET TRADING_DAY_SKIPPED DAY_NOT_FINISHED }
+enum Direction { LONG SHORT }
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  createdAt DateTime @default(now())
+  plans TrackingPlan[]
+  checkIns DailyCheckIn[]
+  audits CheckInAuditEvent[]
+  trades Trade[]
+  rules TradingRule[]
+  weeklyReviews WeeklyReview[]
+  monthlyReviews MonthlyReview[]
+}
+model TrackingPlan {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate DateTime @db.Date
+  endDate DateTime @db.Date
+  initialTargetCents Int @default(1500)
+  incrementCents Int @default(1000)
+  intervalDays Int @default(7)
+  currency String @default("USD")
+  status String @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  checkIns DailyCheckIn[]
+  @@index([userId, status])
+}
+model DailyCheckIn {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId String
+  plan TrackingPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  date DateTime @db.Date
+  targetCents Int
+  status CheckInStatus
+  note String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  audits CheckInAuditEvent[]
+  @@unique([userId, date])
+  @@index([userId, planId, date])
+}
+model CheckInAuditEvent {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkInId String
+  checkIn DailyCheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  previousStatus CheckInStatus?
+  newStatus CheckInStatus
+  createdAt DateTime @default(now())
+  @@index([checkInId])
+}
+model Trade {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tradedAt DateTime
+  instrument String
+  direction Direction
+  entryPrice Decimal? @db.Decimal(18,6)
+  exitPrice Decimal? @db.Decimal(18,6)
+  size Decimal? @db.Decimal(18,6)
+  realisedPnlCents Int?
+  feesCents Int?
+  strategy String?
+  emotion String?
+  rationale String?
+  reviewNotes String?
+  screenshot TradeScreenshot?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, tradedAt])
+}
+model TradeScreenshot {
+  id String @id @default(cuid())
+  tradeId String @unique
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  userId String
+  storageKey String
+  mimeType String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+}
+model TradingRule {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text String
+  active Boolean @default(true)
+  archived Boolean @default(false)
+  sortOrder Int
+  note String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  history TradingRuleHistory[]
+  @@index([userId, sortOrder])
+}
+model TradingRuleHistory {
+  id String @id @default(cuid())
+  ruleId String
+  rule TradingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  previousText String?
+  newText String
+  createdAt DateTime @default(now())
+}
+model WeeklyReview {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week Int
+  notes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, week])
+}
+model MonthlyReview {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month String
+  notes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, month])
+}
